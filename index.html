@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#081522">
+  <meta name="description" content="OceanGuard AI marine intelligence dashboard prototype.">
+  <title>OceanGuard AI | Marine Intelligence</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #081522;
+      --sidebar: #0b1928;
+      --surface: #102132;
+      --surface-raised: #14283b;
+      --surface-hover: #19344a;
+      --line: #23394d;
+      --line-soft: #1b3043;
+      --text: #e8f1f8;
+      --muted: #91a6b8;
+      --faint: #688094;
+      --blue: #51b9e9;
+      --blue-strong: #278fca;
+      --cyan: #62d5d0;
+      --green: #60d6a6;
+      --amber: #e7b66c;
+      --red: #ed817e;
+      --radius: 14px;
+      --shadow: 0 16px 42px rgb(0 0 0 / 14%);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background: var(--canvas);
+      color: var(--text);
+      font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 3px;
+    }
+    .skip-link {
+      position: fixed;
+      z-index: 20;
+      top: 12px;
+      left: 12px;
+      padding: 10px 14px;
+      transform: translateY(-160%);
+      border-radius: 8px;
+      background: var(--blue);
+      color: #04121d;
+      font-weight: 700;
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .app-shell { min-height: 100vh; }
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 5;
+      display: flex;
+      width: 252px;
+      flex-direction: column;
+      padding: 25px 16px 18px;
+      border-right: 1px solid var(--line-soft);
+      background: var(--sidebar);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 2px 8px 25px;
+    }
+    .brand-mark {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #28617a;
+      border-radius: 12px;
+      background: linear-gradient(145deg, #123a50, #102a3c);
+      color: var(--cyan);
+    }
+    .brand-mark svg { width: 23px; height: 23px; }
+    .brand-name { margin: 0; font-size: 13px; font-weight: 750; letter-spacing: .09em; }
+    .brand-caption { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; letter-spacing: .15em; }
+    .nav-label {
+      margin: 10px 9px 8px;
+      color: var(--faint);
+      font-size: 9px;
+      font-weight: 750;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    .nav-list { display: grid; gap: 4px; }
+    .nav-item {
+      display: flex;
+      min-height: 42px;
+      align-items: center;
+      gap: 11px;
+      padding: 0 11px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      color: #a9bac9;
+      cursor: pointer;
+      text-align: left;
+      transition: background .16s ease, color .16s ease, border-color .16s ease;
+    }
+    .nav-item:hover { background: #11273a; color: var(--text); }
+    .nav-item.active {
+      border-color: #1c455c;
+      background: #123047;
+      color: #8bdafa;
+    }
+    .nav-item svg { width: 17px; height: 17px; flex: 0 0 auto; }
+    .sidebar-foot { margin-top: auto; }
+    .data-note {
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #0f2030;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.65;
+    }
+    .data-note strong { display: block; margin-bottom: 5px; color: var(--amber); font-size: 10px; letter-spacing: .09em; }
+    .sidebar-meta { padding: 13px 4px 0; color: var(--faint); font-size: 10px; }
+    main { min-width: 0; margin-left: 252px; padding: 27px clamp(18px, 3vw, 42px) 18px; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 23px;
+    }
+    .topbar h1 { margin: 0; font-size: clamp(23px, 2vw, 29px); font-weight: 680; letter-spacing: -.035em; }
+    .eyebrow { margin-bottom: 5px; color: var(--blue); font-size: 9px; font-weight: 750; letter-spacing: .16em; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .status-pill {
+      display: inline-flex;
+      min-height: 34px;
+      align-items: center;
+      gap: 8px;
+      padding: 0 11px;
+      border: 1px solid #3f4b46;
+      border-radius: 30px;
+      background: #192722;
+      color: #c7d9ce;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 3px rgb(231 182 108 / 12%); }
+    .btn {
+      display: inline-flex;
+      min-height: 36px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid #2b5168;
+      border-radius: 8px;
+      background: #123147;
+      color: #a9e2f6;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 650;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: #4285a7; background: #17415b; }
+    .btn svg { width: 15px; height: 15px; }
+    .btn-primary { border-color: var(--blue); background: var(--blue); color: #071622; }
+    .btn-primary:hover { border-color: #7acbef; background: #7acbef; }
+    .btn-quiet { border-color: var(--line); background: transparent; color: #c3d0dc; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .page-intro { margin: -13px 0 19px; color: var(--muted); font-size: 12px; }
+    .demo-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 17px;
+      padding: 11px 13px;
+      border: 1px solid #51452f;
+      border-radius: 10px;
+      background: #201e19;
+      color: #dfc99e;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .demo-banner svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; }
+    .demo-banner strong { color: #f0d9a8; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 13px;
+      margin-bottom: 16px;
+    }
+    .metric-card, .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .metric-card { position: relative; min-height: 125px; padding: 16px 17px; overflow: hidden; }
+    .metric-card::after {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 70px;
+      height: 70px;
+      border-radius: 0 0 0 100%;
+      background: linear-gradient(135deg, transparent, rgb(81 185 233 / 6%));
+      content: "";
+    }
+    .metric-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+    .metric-icon { display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid #244c62; border-radius: 8px; background: #123146; color: var(--blue); }
+    .metric-icon svg { width: 15px; height: 15px; }
+    .metric-value { margin-top: 11px; font-size: 27px; font-weight: 690; letter-spacing: -.04em; line-height: 1.1; }
+    .metric-caption { margin-top: 5px; color: var(--faint); font-size: 10px; }
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(270px, .85fr); gap: 15px; margin-bottom: 15px; }
+    .panel { padding: 17px; }
+    .panel-heading { display: flex; min-height: 25px; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 13px; }
+    .panel-heading h2, .panel-heading h3 { margin: 0; font-size: 13px; font-weight: 680; }
+    .panel-subtitle { margin: 3px 0 0; color: var(--faint); font-size: 10px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 7px;
+      border: 1px solid #2a4e61;
+      border-radius: 6px;
+      background: #122d3f;
+      color: #9ed9ed;
+      font-size: 8px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      white-space: nowrap;
+    }
+    .map-frame { position: relative; overflow: hidden; border: 1px solid #20394b; border-radius: 10px; background: #10283a; }
+    #map { z-index: 1; width: 100%; height: 340px; background: #10283a; }
+    #mapStatus {
+      position: absolute;
+      z-index: 2;
+      bottom: 9px;
+      left: 9px;
+      max-width: calc(100% - 18px);
+      padding: 6px 9px;
+      border: 1px solid rgb(79 112 134 / 65%);
+      border-radius: 7px;
+      background: rgb(8 21 34 / 92%);
+      color: #c4d6e2;
+      font-size: 9px;
+      pointer-events: none;
+    }
+    .map-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 11px; }
+    .map-legend { display: flex; flex-wrap: wrap; gap: 11px; color: var(--muted); font-size: 9px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+    .legend-boundary { width: 11px; height: 8px; border: 1px dashed var(--amber); border-radius: 2px; }
+    .legend-track { width: 13px; border-top: 2px dashed var(--cyan); }
+    .recent-list { display: grid; gap: 9px; }
+    .incident-card {
+      padding: 11px;
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      background: #112538;
+      transition: border-color .16s ease, background .16s ease;
+    }
+    .incident-card:hover { border-color: #31566a; background: #142c40; }
+    .incident-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .incident-name { font-size: 11px; font-weight: 700; }
+    .incident-id { display: block; margin-top: 2px; color: var(--faint); font-size: 9px; }
+    .incident-meta { margin-top: 8px; color: var(--muted); font-size: 9px; line-height: 1.6; }
+    .status-label { display: inline-flex; align-items: center; gap: 5px; color: #efd09b; font-size: 9px; white-space: nowrap; }
+    .status-label::before { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); content: ""; }
+    .status-review { color: #b8d5e7; }
+    .status-review::before { background: var(--blue); }
+    .table-panel { margin-bottom: 15px; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { padding: 9px 10px; color: var(--faint); font-size: 9px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+    td { padding: 12px 10px; border-top: 1px solid var(--line-soft); color: #c8d5df; font-size: 10px; vertical-align: middle; }
+    tbody tr:hover { background: rgb(27 48 67 / 45%); }
+    .table-primary { display: block; color: var(--text); font-weight: 650; }
+    .table-secondary { display: block; margin-top: 2px; color: var(--faint); font-size: 9px; }
+    .confidence-wrap { display: flex; min-width: 105px; align-items: center; gap: 8px; }
+    .confidence-track { width: 56px; height: 4px; overflow: hidden; border-radius: 4px; background: #263b4c; }
+    .confidence-fill { display: block; height: 100%; border-radius: inherit; background: var(--cyan); }
+    .confidence-text { color: #b5d6df; font-size: 10px; font-weight: 650; }
+    .table-action { padding: 4px 7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #91d6f3; cursor: pointer; font-size: 9px; }
+    .table-action:hover { border-color: #30556c; background: #15354a; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .filter-row { display: flex; align-items: end; gap: 11px; margin-bottom: 14px; }
+    .field { display: grid; gap: 5px; }
+    .field label { color: var(--muted); font-size: 10px; font-weight: 600; }
+    .field input, .field select {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0c1c2b;
+      color: var(--text);
+    }
+    .filter-row .field { width: min(260px, 100%); }
+    .empty-state, .error-state {
+      display: grid;
+      min-height: 140px;
+      place-content: center;
+      justify-items: center;
+      padding: 24px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .empty-state strong, .error-state strong { margin-bottom: 5px; color: #d7e4ed; font-size: 12px; }
+    .empty-state span, .error-state span { max-width: 340px; font-size: 10px; }
+    .error-state strong { color: #f0a09a; }
+    .loading-state { display: flex; min-height: 120px; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: 10px; }
+    .spinner { width: 14px; height: 14px; border: 2px solid #284355; border-top-color: var(--cyan); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .callout {
+      margin: 14px 0 0;
+      padding: 12px 13px;
+      border: 1px solid #4f442e;
+      border-radius: 9px;
+      background: #211f1a;
+      color: #d9c79f;
+      font-size: 10px;
+      line-height: 1.65;
+    }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; max-width: 650px; }
+    .section-title { margin: 23px 0 10px; font-size: 12px; }
+    .result-box { min-height: 58px; margin-top: 15px; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: #0c1d2b; color: var(--muted); font-size: 11px; }
+    .result-box strong { color: var(--cyan); }
+    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 0; border-top: 1px solid var(--line-soft); }
+    .settings-copy strong { display: block; font-size: 11px; }
+    .settings-copy span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .switch { position: relative; width: 40px; height: 23px; flex: 0 0 auto; }
+    .switch input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .switch-track { position: absolute; inset: 0; border: 1px solid #385062; border-radius: 20px; background: #203546; pointer-events: none; transition: background .16s ease; }
+    .switch-track::after { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: #a3b4c0; content: ""; transition: transform .16s ease; }
+    .switch input:checked + .switch-track { border-color: #3189a9; background: #14506a; }
+    .switch input:checked + .switch-track::after { transform: translateX(17px); background: #b5edfa; }
+    .switch input:focus-visible + .switch-track { outline: 2px solid var(--cyan); outline-offset: 3px; }
+    .footer { padding: 17px 0 4px; color: var(--faint); font-size: 9px; text-align: center; }
+    #toast {
+      position: fixed;
+      z-index: 15;
+      right: 20px;
+      bottom: 20px;
+      max-width: min(360px, calc(100vw - 32px));
+      padding: 12px 15px;
+      transform: translateY(12px);
+      border: 1px solid #31647c;
+      border-radius: 9px;
+      background: #123247;
+      box-shadow: var(--shadow);
+      color: var(--text);
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    #toast.visible { transform: translateY(0); opacity: 1; }
+    .leaflet-container { font: inherit; }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #102539; color: var(--text); }
+    .leaflet-popup-content { font-size: 11px; line-height: 1.6; }
+    .leaflet-control-zoom a { background: #102539 !important; color: var(--text) !important; border-color: #27445a !important; }
+    .leaflet-control-attribution { background: rgb(8 21 34 / 82%) !important; color: #a5b7c5 !important; }
+    .leaflet-control-attribution a { color: #9bdcf0 !important; }
+    @media (max-width: 1120px) {
+      .sidebar { width: 220px; }
+      main { margin-left: 220px; padding-right: 22px; padding-left: 22px; }
+      .content-grid { grid-template-columns: minmax(0, 1.4fr) minmax(245px, .9fr); }
+      .metric-card { padding: 14px; }
+    }
+    @media (max-width: 850px) {
+      .sidebar { position: static; width: auto; padding: 13px 16px 10px; border-right: 0; border-bottom: 1px solid var(--line-soft); }
+      .brand { padding: 0 3px 10px; }
+      .nav-label, .sidebar-foot { display: none; }
+      .nav-list { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+      .nav-item { min-height: 37px; flex: 0 0 auto; gap: 7px; padding: 0 10px; font-size: 10px; white-space: nowrap; }
+      .nav-item svg { width: 15px; height: 15px; }
+      main { margin-left: 0; padding: 22px 18px 15px; }
+      .content-grid { grid-template-columns: minmax(0, 1.3fr) minmax(235px, .9fr); }
+    }
+    @media (max-width: 650px) {
+      main { padding: 19px 13px 13px; }
+      .topbar { align-items: flex-start; margin-bottom: 18px; }
+      .topbar h1 { font-size: 23px; }
+      .topbar-actions { flex-direction: column-reverse; align-items: flex-end; gap: 7px; }
+      .status-pill { min-height: 28px; padding: 0 8px; font-size: 9px; }
+      .topbar-actions .btn { min-height: 32px; padding: 0 9px; font-size: 10px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 11px; }
+      .metric-card { min-height: 111px; padding: 12px; }
+      .metric-top { font-size: 9px; }
+      .metric-icon { width: 25px; height: 25px; }
+      .metric-value { margin-top: 9px; font-size: 23px; }
+      .metric-caption { font-size: 9px; }
+      .content-grid { grid-template-columns: 1fr; gap: 11px; margin-bottom: 11px; }
+      .panel { padding: 13px; border-radius: 12px; }
+      #map { height: 280px; }
+      .map-toolbar { align-items: flex-start; flex-direction: column; }
+      .map-toolbar .btn { min-height: 32px; }
+      .demo-banner { font-size: 10px; }
+      .table-panel { margin-bottom: 11px; }
+      .filter-row { align-items: stretch; flex-direction: column; }
+      .filter-row .field { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">Skip to dashboard</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15.5c2.2 0 2.2-2 4.5-2s2.3 2 4.5 2 2.3-2 4.5-2 2.3 2 4.5 2"/><path d="M3 19c2.2 0 2.2-2 4.5-2s2.3 2 4.5 2 2.3-2 4.5-2 2.3 2 4.5 2"/><path d="m12 3 5 6H7l5-6Z"/><path d="M12 9v3"/></svg>
+        </div>
+        <div><p class="brand-name">OCEANGUARD AI</p><span class="brand-caption">MARINE INTELLIGENCE</span></div>
+      </div>
+      <p class="nav-label">Workspace</p>
+      <nav class="nav-list" aria-label="Workspace pages">
+        <button class="nav-item active" type="button" data-page="dashboard" aria-current="page" aria-controls="dashboardPage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg>Dashboard</button>
+        <button class="nav-item" type="button" data-page="detections" aria-controls="detectionsPage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M22 12h-2M12 22v-2M2 12h2"/></svg>Spill Detection</button>
+        <button class="nav-item" type="button" data-page="history" aria-controls="historyPage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 12a8.5 8.5 0 1 0 2.3-5.8L3.5 8.5"/><path d="M3.5 3.5v5h5M12 7v5l3.5 2"/></svg>Incident History</button>
+        <button class="nav-item" type="button" data-page="vessels" aria-controls="vesselsPage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m4 14 2-7h12l2 7-8 5-8-5Z"/><path d="M8 7l1.5-3h5L16 7M3 18c1.2 1.5 2.4 2 4 2s2.8-.5 4-2c1.2 1.5 2.4 2 4 2s2.8-.5 4-2c.7.8 1.4 1.3 2.5 1.6"/></svg>Vessel Tracking</button>
+        <button class="nav-item" type="button" data-page="drift" aria-controls="driftPage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 18c3-8 6-9 10-5s4 4 6-3"/><path d="m16 10 4-1 1 4"/><circle cx="4" cy="18" r="1.5"/></svg>Drift Prediction</button>
+        <button class="nav-item" type="button" data-page="reports" aria-controls="reportsPage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v5h4M9 13h6M9 16.5h6"/></svg>Reports</button>
+        <button class="nav-item" type="button" data-page="settings" aria-controls="settingsPage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.2 1-1.4 2.4-1.5-.6a8 8 0 0 1-1.7 1l-.3 1.6h-2.8l-.3-1.6a8 8 0 0 1-1.7-1l-1.5.6-1.4-2.4 1.2-1a7 7 0 0 1 0-2l-1.2-1 1.4-2.4 1.5.6a8 8 0 0 1 1.7-1l.3-1.6h2.8l.3 1.6a8 8 0 0 1 1.7 1l1.5-.6 1.4 2.4-1.2 1a7 7 0 0 1 0 2Z" transform="translate(-1 -1)"/></svg>Settings</button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="data-note"><strong>DEMONSTRATION MODE</strong>Only fictional sample records are included. Live satellite, AIS, environmental, and spill-detection feeds are not connected.</div>
+        <div class="sidebar-meta">Decision support prototype · Human review required</div>
+      </div>
+    </aside>
+
+    <main id="mainContent">
+      <header class="topbar">
+        <div><div class="eyebrow">MARINE POLLUTION INTELLIGENCE</div><h1 id="pageTitle">Monitoring Dashboard</h1></div>
+        <div class="topbar-actions">
+          <span class="status-pill"><span class="status-dot" aria-hidden="true"></span>Sample data only</span>
+          <button class="btn" id="headerExport" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg>Export report</button>
+        </div>
+      </header>
+
+      <section class="page active" id="dashboardPage" aria-labelledby="pageTitle">
+        <p class="page-intro">Monitor illustrative spill records and review their geographic context.</p>
+        <div class="demo-banner" role="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg><span><strong>Demonstration data:</strong> Every incident, vessel, score, and map annotation below is fictional. Times and affected area are not available; no live monitoring service is connected.</span></div>
+        <div class="metrics" aria-label="Summary metrics">
+          <article class="metric-card"><div class="metric-top"><span>Total detections</span><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></svg></span></div><div class="metric-value" id="detectionCount">—</div><div class="metric-caption">Fictional sample records</div></article>
+          <article class="metric-card"><div class="metric-top"><span>Incidents under review</span><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M10.5 7v4l2.5 1.5"/></svg></span></div><div class="metric-value" id="reviewCount">—</div><div class="metric-caption">Sample records requiring review</div></article>
+          <article class="metric-card"><div class="metric-top"><span>Affected area</span><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2V6Z"/><path d="M9 4v14m6-12v14"/></svg></span></div><div class="metric-value" id="affectedArea">—</div><div class="metric-caption">Not measured in this prototype</div></article>
+          <article class="metric-card"><div class="metric-top"><span>Vessels analysed</span><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 14 2-7h12l2 7-8 5-8-5Z"/><path d="M8 7l1.5-3h5L16 7"/></svg></span></div><div class="metric-value" id="vesselCount">—</div><div class="metric-caption">Fictional candidates; not AIS data</div></article>
+        </div>
+
+        <div class="content-grid">
+          <section class="panel" aria-labelledby="mapHeading">
+            <div class="panel-heading"><div><h2 id="mapHeading">Geospatial monitoring</h2><p class="panel-subtitle">Illustrative Arabian Sea review area</p></div><span class="tag">DEMO MAP</span></div>
+            <div class="map-frame"><div id="map" role="application" aria-label="Interactive map with fictional spill markers and illustrative boundary"></div><div id="mapStatus" role="status" aria-live="polite">Loading interactive map…</div></div>
+            <div class="map-toolbar"><div class="map-legend" aria-label="Map legend"><span class="legend-item"><i class="legend-dot"></i>Sample detection</span><span class="legend-item"><i class="legend-boundary"></i>Illustrative boundary</span><span class="legend-item"><i class="legend-track"></i>Sample track</span></div><button class="btn btn-quiet" id="fitMap" type="button">Fit detections</button></div>
+          </section>
+          <section class="panel" aria-labelledby="recentHeading">
+            <div class="panel-heading"><div><h2 id="recentHeading">Recent incidents</h2><p class="panel-subtitle">Timestamps are not recorded</p></div><button class="btn btn-quiet" type="button" data-page-link="history">View history</button></div>
+            <div class="recent-list" id="recentIncidents"><div class="loading-state"><span class="spinner" aria-hidden="true"></span>Loading sample records…</div></div>
+          </section>
+        </div>
+
+        <section class="panel table-panel" aria-labelledby="tableHeading">
+          <div class="panel-heading"><div><h2 id="tableHeading">Incident overview</h2><p class="panel-subtitle">Confidence values are illustrative scores, not validated probabilities.</p></div><button class="btn btn-quiet" type="button" data-page-link="detections">All detections</button></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">Incident</th><th scope="col">Status</th><th scope="col">Time</th><th scope="col">Location</th><th scope="col">Confidence</th><th scope="col"><span class="visually-hidden">Map action</span></th></tr></thead><tbody id="incidentTableBody"><tr><td colspan="6"><div class="loading-state"><span class="spinner" aria-hidden="true"></span>Loading sample records…</div></td></tr></tbody></table></div>
+        </section>
+      </section>
+
+      <section class="page" id="detectionsPage" aria-labelledby="pageTitle">
+        <p class="page-intro">Review the fictional spill-detection records included with this prototype.</p>
+        <div class="panel">
+          <div class="panel-heading"><div><h2>Spill detection records</h2><p class="panel-subtitle">No live satellite imagery or detection model is connected.</p></div><span class="tag">SAMPLE RECORDS</span></div>
+          <div class="filter-row"><div class="field"><label for="detectionFilter">Filter by status</label><select id="detectionFilter"><option value="all">All statuses</option><option value="Under investigation">Under investigation</option><option value="Review required">Review required</option></select></div></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">Incident</th><th scope="col">Status</th><th scope="col">Time</th><th scope="col">Location</th><th scope="col">Confidence</th><th scope="col"><span class="visually-hidden">Map action</span></th></tr></thead><tbody id="detectionTableBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="page" id="historyPage" aria-labelledby="pageTitle">
+        <p class="page-intro">A review log of the demonstration incidents available in this local prototype.</p>
+        <section class="panel">
+          <div class="panel-heading"><div><h2>Incident history</h2><p class="panel-subtitle">No historical or live incident feed is connected.</p></div><span class="tag">DEMO HISTORY</span></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">Incident</th><th scope="col">Status</th><th scope="col">Time</th><th scope="col">Location</th><th scope="col">Confidence</th><th scope="col"><span class="visually-hidden">Map action</span></th></tr></thead><tbody id="historyTableBody"></tbody></table></div>
+        </section>
+      </section>
+
+      <section class="page" id="vesselsPage" aria-labelledby="pageTitle">
+        <p class="page-intro">Explore fictional vessel records. These are not live AIS tracks and do not identify real vessels.</p>
+        <section class="panel">
+          <div class="panel-heading"><div><h2>Vessel tracking</h2><p class="panel-subtitle">Sample candidates only; no AIS service is connected.</p></div><span class="tag">ILLUSTRATIVE DATA</span></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">Sample vessel ID</th><th scope="col">Timing fit</th><th scope="col">Proximity</th><th scope="col">Track consistency</th><th scope="col">Illustrative index</th></tr></thead><tbody id="vesselTableBody"></tbody></table></div>
+          <p class="callout">These fictional factor scores are not calibrated probabilities, evidence of wrongdoing, or derived from actual vessel movements.</p>
+        </section>
+      </section>
+
+      <section class="page" id="driftPage" aria-labelledby="pageTitle">
+        <p class="page-intro">Try a local vector calculation with user-provided example conditions.</p>
+        <section class="panel">
+          <div class="panel-heading"><div><h2>Drift preview</h2><p class="panel-subtitle">This interface does not run a validated spill-drift model.</p></div><span class="tag">LOCAL EXAMPLE</span></div>
+          <div class="form-grid">
+            <div class="field"><label for="windSpeed">Wind speed (m/s)</label><input id="windSpeed" type="number" min="0" max="100" step="0.1" value="5"></div>
+            <div class="field"><label for="windDirection">Wind direction (degrees from north)</label><input id="windDirection" type="number" min="0" max="359" step="1" value="90"></div>
+            <div class="field"><label for="currentSpeed">Current speed (m/s)</label><input id="currentSpeed" type="number" min="0" max="10" step="0.1" value="0.5"></div>
+            <div class="field"><label for="currentDirection">Current direction (degrees from north)</label><input id="currentDirection" type="number" min="0" max="359" step="1" value="180"></div>
+            <div class="field"><label for="durationHours">Example duration (hours)</label><input id="durationHours" type="number" min="1" max="72" step="1" value="6"></div>
+          </div>
+          <button class="btn btn-primary" id="runDriftPreview" type="button" style="margin-top:15px">Calculate vector preview</button>
+          <div class="result-box" id="driftResult" role="status" aria-live="polite">Enter example conditions to calculate a simple vector preview.</div>
+          <p class="callout">The preview treats the provided wind and current as simple vectors. It omits physical drift factors, uncertainty, real observations, and location; do not interpret it as a spill trajectory or forecast.</p>
+        </section>
+      </section>
+
+      <section class="page" id="reportsPage" aria-labelledby="pageTitle">
+        <p class="page-intro">Export only the demonstration records currently bundled with this page.</p>
+        <section class="panel">
+          <div class="panel-heading"><div><h2>Reports</h2><p class="panel-subtitle">No live or external incident data will be included.</p></div><span class="tag">CSV EXPORT</span></div>
+          <div class="settings-row"><div class="settings-copy"><strong>Incident summary</strong><span>Export sample incident IDs, statuses, recorded-time availability, coordinates, and illustrative confidence scores.</span></div><button class="btn btn-primary" id="downloadReport" type="button">Download CSV</button></div>
+          <p class="callout">All exported records are fictional interface demonstrations. A blank or unavailable measurement remains unavailable; no values are inferred.</p>
+        </section>
+      </section>
+
+      <section class="page" id="settingsPage" aria-labelledby="pageTitle">
+        <p class="page-intro">Adjust the local map display. Settings are not saved to an account or server.</p>
+        <section class="panel">
+          <div class="panel-heading"><div><h2>Display settings</h2><p class="panel-subtitle">Changes apply only in this browser session.</p></div><span class="tag">LOCAL ONLY</span></div>
+          <div class="settings-row"><div class="settings-copy"><strong>Illustrative review boundary</strong><span>Show or hide the conceptual dashed boundary on the map.</span></div><label class="switch" aria-label="Show illustrative review boundary"><input id="boundaryToggle" type="checkbox" checked><span class="switch-track"></span></label></div>
+          <div class="settings-row"><div class="settings-copy"><strong>Record source</strong><span>Bundled fictional demonstration records; no live feeds connected.</span></div><span class="tag">DEMO DATA</span></div>
+          <div class="settings-row"><div class="settings-copy"><strong>Affected area</strong><span>No measured spill area is available in this prototype.</span></div><span class="tag">NOT AVAILABLE</span></div>
+        </section>
+      </section>
+      <footer class="footer">OCEANGUARD AI · MARINE INTELLIGENCE &nbsp;|&nbsp; Prototype for decision support only · Human verification required</footer>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    "use strict";
+
+    const detections = [
+      { id: "OG-001", name: "Detection Alpha", lat: 12.50, lng: 72.80, confidence: 87, status: "Under investigation", area: "Arabian Sea demonstration area", time: null },
+      { id: "OG-002", name: "Detection Beta", lat: 14.00, lng: 74.00, confidence: 71, status: "Review required", area: "Arabian Sea demonstration area", time: null },
+      { id: "OG-003", name: "Detection Gamma", lat: 10.80, lng: 73.50, confidence: 64, status: "Review required", area: "Arabian Sea demonstration area", time: null }
+    ];
+    const vessels = [
+      { id: "DEMO-V001", timing: 85, proximity: 78, trajectory: 82, drift: 70 },
+      { id: "DEMO-V002", timing: 72, proximity: 88, trajectory: 65, drift: 75 },
+      { id: "DEMO-V003", timing: 65, proximity: 61, trajectory: 73, drift: 58 },
+      { id: "DEMO-V004", timing: 45, proximity: 52, trajectory: 48, drift: 40 }
+    ];
+    const pageTitles = {
+      dashboard: "Monitoring Dashboard",
+      detections: "Spill Detection",
+      history: "Incident History",
+      vessels: "Vessel Tracking",
+      drift: "Drift Prediction",
+      reports: "Reports",
+      settings: "Settings"
+    };
+    const markers = new Map();
+    let map = null;
+    let reviewBoundary = null;
+    let toastTimer = 0;
+    const $ = id => document.getElementById(id);
+
+    function escapeHTML(value) {
+      return String(value).replace(/[&<>"']/g, character => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      })[character]);
+    }
+
+    function notify(message) {
+      const toast = $("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove("visible"), 3000);
+    }
+
+    function showPage(page) {
+      if (!Object.hasOwn(pageTitles, page)) return;
+      document.querySelectorAll(".page").forEach(section => section.classList.toggle("active", section.id === page + "Page"));
+      document.querySelectorAll(".nav-item").forEach(button => {
+        const selected = button.dataset.page === page;
+        button.classList.toggle("active", selected);
+        if (selected) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      $("pageTitle").textContent = pageTitles[page];
+      if (page === "dashboard" && map) window.setTimeout(() => map.invalidateSize(), 80);
+      if (page === "history") renderIncidentTable("historyTableBody", detections);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => showPage(button.dataset.page)));
+    document.querySelectorAll("[data-page-link]").forEach(button => button.addEventListener("click", () => showPage(button.dataset.pageLink)));
+
+    function statusMarkup(status) {
+      const className = status === "Under investigation" ? "status-label" : "status-label status-review";
+      return `<span class="${className}">${escapeHTML(status)}</span>`;
+    }
+
+    function confidenceMarkup(value) {
+      return `<span class="confidence-wrap"><span class="confidence-track" aria-hidden="true"><span class="confidence-fill" style="width:${value}%"></span></span><span class="confidence-text">${value}%*</span></span>`;
+    }
+
+    function renderIncidentTable(containerId, records) {
+      const body = $(containerId);
+      if (!records.length) {
+        body.innerHTML = `<tr><td colspan="6"><div class="empty-state"><strong>No incidents to show</strong><span>There are no sample records for this selection.</span></div></td></tr>`;
+        return;
+      }
+      body.innerHTML = records.map(record => `
+        <tr>
+          <td><span class="table-primary">${escapeHTML(record.name)}</span><span class="table-secondary">${escapeHTML(record.id)}</span></td>
+          <td>${statusMarkup(record.status)}</td>
+          <td>${record.time ? escapeHTML(record.time) : "Not recorded"}</td>
+          <td><span class="table-primary">${escapeHTML(record.area)}</span><span class="table-secondary">${record.lat.toFixed(2)}° N, ${record.lng.toFixed(2)}° E</span></td>
+          <td>${confidenceMarkup(record.confidence)}</td>
+          <td><button class="table-action" type="button" data-locate="${escapeHTML(record.id)}" aria-label="Locate ${escapeHTML(record.name)} on map">Locate</button></td>
+        </tr>`).join("");
+      body.querySelectorAll("[data-locate]").forEach(button => {
+        button.addEventListener("click", () => locateDetection(button.dataset.locate));
+      });
+    }
+
+    function renderRecentIncidents(records) {
+      const list = $("recentIncidents");
+      if (!records.length) {
+        list.innerHTML = `<div class="empty-state"><strong>No recent incidents</strong><span>No records are available for this view.</span></div>`;
+        return;
+      }
+      list.innerHTML = records.slice(0, 3).map(record => `
+        <article class="incident-card">
+          <div class="incident-card-top"><div><span class="incident-name">${escapeHTML(record.name)}</span><span class="incident-id">${escapeHTML(record.id)} · ${record.confidence}% illustrative score</span></div>${statusMarkup(record.status)}</div>
+          <div class="incident-meta">Time not recorded<br>${escapeHTML(record.area)} · ${record.lat.toFixed(2)}° N, ${record.lng.toFixed(2)}° E</div>
+        </article>`).join("");
+    }
+
+    function renderMetrics() {
+      $("detectionCount").textContent = String(detections.length).padStart(2, "0");
+      $("reviewCount").textContent = String(detections.filter(record => record.status === "Under investigation").length).padStart(2, "0");
+      $("affectedArea").textContent = "N/A";
+      $("vesselCount").textContent = String(vessels.length).padStart(2, "0");
+    }
+
+    function renderVesselTable() {
+      const body = $("vesselTableBody");
+      if (!vessels.length) {
+        body.innerHTML = `<tr><td colspan="5"><div class="empty-state"><strong>No vessel records</strong><span>No sample vessel records are available.</span></div></td></tr>`;
+        return;
+      }
+      body.innerHTML = vessels.map(vessel => {
+        const index = Math.round((vessel.timing + vessel.proximity + vessel.trajectory + vessel.drift) / 4);
+        return `<tr><td><span class="table-primary">${escapeHTML(vessel.id)}</span><span class="table-secondary">Fictional sample</span></td><td>${vessel.timing}/100</td><td>${vessel.proximity}/100</td><td>${vessel.trajectory}/100</td><td><span class="confidence-text">${index}/100*</span></td></tr>`;
+      }).join("");
+    }
+
+    function renderAll() {
+      renderMetrics();
+      renderRecentIncidents(detections);
+      renderIncidentTable("incidentTableBody", detections);
+      renderIncidentTable("detectionTableBody", detections);
+      renderIncidentTable("historyTableBody", detections);
+      renderVesselTable();
+    }
+
+    $("detectionFilter").addEventListener("change", event => {
+      const selected = event.target.value;
+      const records = selected === "all" ? detections : detections.filter(record => record.status === selected);
+      renderIncidentTable("detectionTableBody", records);
+    });
+
+    function updateMapStatus(message, isError) {
+      const status = $("mapStatus");
+      status.textContent = message;
+      status.style.borderColor = isError ? "#89524e" : "";
+      status.style.color = isError ? "#f2b0a7" : "";
+    }
+
+    function fitDetections() {
+      if (!map) {
+        notify("The map is unavailable. Check your connection and reload to retry.");
+        return;
+      }
+      if (markers.size) {
+        const bounds = L.featureGroup(Array.from(markers.values())).getBounds();
+        map.fitBounds(bounds.pad(0.45), { maxZoom: 8 });
+      }
+    }
+
+    function locateDetection(id) {
+      const record = detections.find(item => item.id === id);
+      if (!record) {
+        notify("That incident is not available in the sample records.");
+        return;
+      }
+      showPage("dashboard");
+      if (!map) {
+        notify("The map is unavailable. Check your connection and reload to retry.");
+        return;
+      }
+      map.setView([record.lat, record.lng], 8);
+      const marker = markers.get(record.id);
+      if (marker) marker.openPopup();
+      else notify("No map marker is available for this sample record.");
+    }
+
+    function initializeMap() {
+      if (!window.L) {
+        updateMapStatus("Map library unavailable. Check your connection; incident records remain available.", true);
+        return;
+      }
+      try {
+        map = L.map("map", { zoomControl: true, scrollWheelZoom: false }).setView([12.5, 73.2], 6);
+        const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 18,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        });
+        let hasTiles = false;
+        tiles.on("tileload", () => {
+          if (!hasTiles) {
+            hasTiles = true;
+            updateMapStatus("Illustrative sample records · Map imagery loaded");
+          }
+        });
+        tiles.on("tileerror", () => {
+          if (!hasTiles) updateMapStatus("Map imagery unavailable. Annotations may still be shown.", true);
+        });
+        tiles.addTo(map);
+
+        detections.forEach(record => {
+          const marker = L.circleMarker([record.lat, record.lng], {
+            radius: 8, color: "#ffc0b7", fillColor: "#ed817e", fillOpacity: 0.92, weight: 2
+          }).addTo(map);
+          marker.bindPopup(`<strong>${escapeHTML(record.name)}</strong><br>ID: ${escapeHTML(record.id)}<br>Illustrative score: ${record.confidence}%<br>${escapeHTML(record.status)}<br><em>Fictional demonstration record</em>`);
+          markers.set(record.id, marker);
+        });
+
+        const sampleTracks = [
+          [[12.0, 72.1], [12.2, 72.4], [12.35, 72.6]],
+          [[13.3, 74.8], [13.5, 74.4], [13.7, 74.2]],
+          [[10.2, 72.9], [10.5, 73.2], [10.7, 73.4]]
+        ];
+        sampleTracks.forEach((track, index) => {
+          L.polyline(track, { color: "#62d5d0", weight: 2, opacity: 0.8, dashArray: "6 7" })
+            .addTo(map).bindPopup(`Sample track ${index + 1} — not actual AIS data`);
+        });
+        reviewBoundary = L.polygon([[11.1, 71.9], [14.5, 71.9], [14.7, 75.1], [10.9, 75.0]], {
+          color: "#e7b66c", weight: 1.5, opacity: 0.85, fillColor: "#e7b66c", fillOpacity: 0.035, dashArray: "5 6"
+        }).addTo(map).bindPopup("Illustrative review boundary — not an official geographic or maritime boundary");
+        L.circle([12.2, 72.45], {
+          radius: 18000, color: "#e7b66c", fillColor: "#e7b66c", fillOpacity: 0.12, dashArray: "5 5"
+        }).addTo(map).bindPopup("Hypothetical region — not a calculated spill source");
+        updateMapStatus("Illustrative sample records · Loading map imagery…");
+        map.on("load", () => window.setTimeout(() => map && map.invalidateSize(), 80));
+      } catch (error) {
+        map = null;
+        updateMapStatus("The map could not be initialized. Incident records remain available.", true);
+        console.error("OceanGuard map initialization failed:", error);
+      }
+    }
+
+    $("fitMap").addEventListener("click", fitDetections);
+    $("boundaryToggle").addEventListener("change", event => {
+      if (!map || !reviewBoundary) {
+        notify("The map is not available to update this setting.");
+        return;
+      }
+      if (event.target.checked) reviewBoundary.addTo(map);
+      else map.removeLayer(reviewBoundary);
+      notify(event.target.checked ? "Illustrative boundary shown." : "Illustrative boundary hidden.");
+    });
+
+    function downloadReport() {
+      const columns = ["incident_id", "name", "status", "time", "location", "latitude", "longitude", "illustrative_confidence_percent"];
+      const quote = value => `"${String(value).replace(/"/g, '""')}"`;
+      const rows = detections.map(record => [
+        record.id, record.name, record.status, record.time || "Not recorded", record.area,
+        record.lat, record.lng, record.confidence
+      ]);
+      const csv = [columns, ...rows].map(row => row.map(quote).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "oceanguard-demo-incidents.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notify("Demonstration incident report downloaded.");
+    }
+    $("downloadReport").addEventListener("click", downloadReport);
+    $("headerExport").addEventListener("click", downloadReport);
+
+    function numberInput(id, min, max) {
+      const input = $(id);
+      const value = Number(input.value);
+      if (!input.value.trim() || !Number.isFinite(value) || value < min || value > max) {
+        input.focus();
+        throw new Error(`${input.labels[0].textContent} must be between ${min} and ${max}.`);
+      }
+      return value;
+    }
+
+    $("runDriftPreview").addEventListener("click", () => {
+      const result = $("driftResult");
+      try {
+        const windSpeed = numberInput("windSpeed", 0, 100);
+        const windDirection = numberInput("windDirection", 0, 359);
+        const currentSpeed = numberInput("currentSpeed", 0, 10);
+        const currentDirection = numberInput("currentDirection", 0, 359);
+        const duration = numberInput("durationHours", 1, 72);
+        const toVector = (speed, direction) => {
+          const radians = direction * Math.PI / 180;
+          return { east: speed * Math.sin(radians), north: speed * Math.cos(radians) };
+        };
+        const wind = toVector(windSpeed, windDirection);
+        const current = toVector(currentSpeed, currentDirection);
+        const east = wind.east + current.east;
+        const north = wind.north + current.north;
+        const speed = Math.hypot(east, north);
+        const bearing = (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+        const distance = speed * duration * 3.6;
+        result.innerHTML = `<strong>Illustrative vector only</strong><br>Combined input bearing: ${bearing.toFixed(0)}° · Simple distance over ${duration} hours: ${distance.toFixed(1)} km`;
+      } catch (error) {
+        result.textContent = error.message;
+      }
+    });
+
+    renderAll();
+    initializeMap();
+  </script>
+</body>
+</html>
